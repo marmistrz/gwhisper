@@ -2,10 +2,14 @@
 //!
 //! The input data is recorded to "$CARGO_MANIFEST_DIR/recorded.wav".
 
+mod recognition;
+
 use clap::Parser;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{SampleFormat, SampleRate, SupportedStreamConfig};
-use whisper_rs::{WhisperContext, FullParams};
+
+use gtk::traits::{ButtonExt, GtkWindowExt};
+use gtk::{prelude::*, Entry, ListBox, TextBuffer, TextView};
+use gtk::{Application, ApplicationWindow, Button};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 #[derive(Parser, Debug)]
@@ -16,80 +20,66 @@ struct Opt {
     device: String,
 }
 
-const CHANNELS: u16 = 1;
-const SAMPLE_RATE: SampleRate = SampleRate(16000);
-const SAMPLE_FORMAT: SampleFormat = SampleFormat::F32;
+const APP_ID: &str = "com.marmistrz.GWhisper";
 
-fn main() -> Result<(), anyhow::Error> {
-    let opt = Opt::parse();
-    let host = cpal::default_host();
+// TODO use proper errors
 
-    // Set up the input device and stream with the default input config.
-    let device = if opt.device == "default" {
-        host.default_input_device()
-    } else {
-        host.input_devices()?
-            .find(|x| x.name().map(|y| y == opt.device).unwrap_or(false))
-    }
-    .expect("failed to find input device");
+fn main() -> gtk::glib::ExitCode {
+    // Create a new application
+    let app = Application::builder().application_id(APP_ID).build();
 
-    println!("Input device: {}", device.name()?);
+    // Connect to "activate" signal of `app`
+    app.connect_activate(build_ui);
 
-    let config = device
-        .default_input_config()
-        .expect("Failed to get default input config");
-    let config = SupportedStreamConfig::new(
-        CHANNELS,
-        SAMPLE_RATE,
-        config.buffer_size().clone(),
-        SAMPLE_FORMAT,
-    );
-
-    println!("Default input config: {:?}", config);
-
-    // A flag to indicate that recording is in progress.
-    println!("Begin recording...");
-
-    let err_fn = move |err| {
-        eprintln!("an error occurred on stream: {}", err);
-    };
-
-    let audio: Vec<f32> = Vec::new();
-    let audio = Arc::new(Mutex::new(audio));
-
-    let stream = {
-        let audio = audio.clone();
-        device.build_input_stream(
-            &config.into(),
-            move |data, _: &_| {
-                println!("Got {} bytes", data.len());
-                audio.lock().unwrap().extend(data)
-            },
-            err_fn,
-            None,
-        )?
-    };
-
-    stream.play()?;
-
-    // Let recording go for roughly three seconds.
-    std::thread::sleep(std::time::Duration::from_secs(3));
-    drop(stream);
-    println!("Recording complete, len = {}!", audio.lock().unwrap().len());
-
-    let mut ctx = WhisperContext::new("/usr/share/whisper.cpp-model-base.en/base.en.bin").expect("Failed to create WhisperContext");
-    let params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 10 });
-    ctx.full(params, audio.lock().unwrap().as_ref()).expect("full failed");
-
-    let num_segments = ctx.full_n_segments();
-    for i in 0..num_segments {
-        let segment = ctx.full_get_segment_text(i).expect("failed to get segment");
-        let start_timestamp = ctx.full_get_segment_t0(i);
-        let end_timestamp = ctx.full_get_segment_t1(i);
-        println!("[{} - {}]: {}", start_timestamp, end_timestamp, segment);
-    }
-
-    Ok(())
+    // Run the application
+    app.run()
 }
 
+fn build_ui(app: &Application) {
+    let button = Button::builder()
+        .label("Press me!")
+        .margin_top(12)
+        .margin_bottom(12)
+        .margin_start(12)
+        .margin_end(12)
+        .expand(true)
+        .build();
 
+    let text_view = TextView::builder()
+        .margin_top(12)
+        .margin_bottom(12)
+        .margin_start(12)
+        .margin_end(12)
+        .valign(gtk::Align::Fill)
+        .editable(true)
+        .wrap_mode(gtk::WrapMode::Word)
+        .can_focus(true)
+        .focus_on_click(true)
+        .expand(true)
+        .build();
+    let text_view = Rc::new(text_view);
+
+    let layout = gtk::Box::builder()
+        .expand(true)
+        .valign(gtk::Align::Fill)
+        .build();
+    layout.pack_start(text_view.as_ref(), true, true, 0);
+    layout.pack_end(&button, true, false, 0);
+
+    // Connect to "clicked" signal of `button`
+    button.connect_clicked(move |_| {
+        let voice = ""; // voice_recognition("default").expect("FIXME");
+        text_view.buffer().expect("buffer").set_text(&voice);
+    });
+
+    // Create a window
+    let window = ApplicationWindow::builder()
+        .application(app)
+        .title("My GTK App")
+        .child(&layout)
+        .build();
+
+    // Present window
+    window.show_all();
+    window.present();
+}
