@@ -9,12 +9,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use whisper_rs::{FullParams, WhisperContext};
 
+fn default_model() -> String {
+    String::from("/usr/share/whisper.cpp-model-base.en/base.en.bin")
+}
+
 #[derive(Parser, Debug)]
 #[command(version, about = "CPAL record_wav example", long_about = None)]
 struct Opt {
     /// The audio device to use
     #[arg(short, long, default_value_t = String::from("default"))]
     device: String,
+    /// The file containing the model
+    #[arg(short, long, default_value_t = default_model())]
+    model: String,
 }
 
 const CHANNELS: u16 = 1;
@@ -85,8 +92,7 @@ fn main() -> Result<(), anyhow::Error> {
     drop(stream);
     println!("Recording complete, len = {}!", audio.lock().unwrap().len());
 
-    let mut ctx = WhisperContext::new("/usr/share/whisper.cpp-model-base.en/base.en.bin")
-        .expect("Failed to create WhisperContext");
+    let mut ctx = WhisperContext::new(&opt.model).expect("Failed to create WhisperContext");
     let params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 10 });
     ctx.full(params, audio.lock().unwrap().as_ref())
         .expect("full failed");
