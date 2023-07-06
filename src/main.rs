@@ -7,20 +7,20 @@ mod recognition;
 use clap::Parser;
 
 use gtk::traits::{ButtonExt, GtkWindowExt};
-use gtk::{prelude::*, Entry, ListBox, TextBuffer, TextView};
+use gtk::{prelude::*, TextView};
 use gtk::{Application, ApplicationWindow, Button};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+
+const APP_NAME: &str = "gwhisper";
+const APP_ID: &str = "com.marmistrz.GWhisper";
 
 #[derive(Parser, Debug)]
-#[command(version, about = "CPAL record_wav example", long_about = None)]
+#[command(version, about = APP_NAME, long_about = None)]
 struct Opt {
     /// The audio device to use
     #[arg(short, long, default_value_t = String::from("default"))]
     device: String,
 }
-
-const APP_ID: &str = "com.marmistrz.GWhisper";
 
 // TODO use proper errors
 
@@ -42,7 +42,6 @@ fn build_ui(app: &Application) {
         .margin_bottom(12)
         .margin_start(12)
         .margin_end(12)
-        .expand(true)
         .build();
 
     let text_view = TextView::builder()
@@ -61,10 +60,10 @@ fn build_ui(app: &Application) {
 
     let layout = gtk::Box::builder()
         .expand(true)
-        .valign(gtk::Align::Fill)
+        .orientation(gtk::Orientation::Vertical)
         .build();
     layout.pack_start(text_view.as_ref(), true, true, 0);
-    layout.pack_end(&button, true, false, 0);
+    layout.pack_end(&button, false, false, 0);
 
     // Connect to "clicked" signal of `button`
     button.connect_clicked(move |_| {
@@ -75,8 +74,10 @@ fn build_ui(app: &Application) {
     // Create a window
     let window = ApplicationWindow::builder()
         .application(app)
-        .title("My GTK App")
+        .title(APP_NAME)
         .child(&layout)
+        .default_height(600)
+        .default_width(800)
         .build();
 
     // Present window

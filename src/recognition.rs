@@ -50,27 +50,27 @@ impl SpeechRecognition {
     pub fn start(&mut self) -> anyhow::Result<()> {
         println!("Begin recording...");
 
-        let err_fn = move |err| {
-            eprintln!("an error occurred on stream: {}", err);
-        };
+        // let err_fn = move |err| {
+        //     eprintln!("an error occurred on stream: {}", err);
+        // };
 
-        let audio: Vec<f32> = Vec::new();
-        let audio = Arc::new(Mutex::new(audio));
+        // let audio: Vec<f32> = Vec::new();
+        // let audio = Arc::new(Mutex::new(audio));
 
-        let stream = {
-            let audio = audio.clone();
-            self.device.build_input_stream(
-                &self.config.into(),
-                move |data, _: &_| {
-                    println!("Got {} bytes", data.len());
-                    audio.lock().unwrap().extend(data)
-                },
-                err_fn,
-                None,
-            )?
-        };
+        // let stream = {
+        //     let audio = audio.clone();
+        //     self.device.build_input_stream(
+        //         &self.config.into(),
+        //         move |data, _: &_| {
+        //             println!("Got {} bytes", data.len());
+        //             audio.lock().unwrap().extend(data)
+        //         },
+        //         err_fn,
+        //         None,
+        //     )?
+        // };
 
-        stream.play()?;
+        // stream.play()?;
         Ok(())
     }
 
@@ -79,24 +79,24 @@ impl SpeechRecognition {
     }
 }
 
-fn voice_recognition() -> anyhow::Result<String> {
-    // A flag to indicate that recording is in progress.
+// fn voice_recognition() -> anyhow::Result<String> {
+//     // A flag to indicate that recording is in progress.
 
-    // Let recording go for roughly three seconds.
-    std::thread::sleep(std::time::Duration::from_secs(3));
-    drop(stream);
-    println!("Recording complete, len = {}!", audio.lock().unwrap().len());
+//     // Let recording go for roughly three seconds.
+//     std::thread::sleep(std::time::Duration::from_secs(3));
+//     drop(stream);
+//     println!("Recording complete, len = {}!", audio.lock().unwrap().len());
 
-    let mut ctx = WhisperContext::new("/usr/share/whisper.cpp-model-base.en/base.en.bin")
-        .expect("Failed to create WhisperContext");
-    let params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 10 });
-    ctx.full(params, audio.lock().unwrap().as_ref())
-        .expect("full failed");
+//     let mut ctx = WhisperContext::new("/usr/share/whisper.cpp-model-base.en/base.en.bin")
+//         .expect("Failed to create WhisperContext");
+//     let params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 10 });
+//     ctx.full(params, audio.lock().unwrap().as_ref())
+//         .expect("full failed");
 
-    let num_segments = ctx.full_n_segments();
-    let segments: Vec<_> = (0..num_segments)
-        .map(|i| ctx.full_get_segment_text(i).expect("failed to get segment"))
-        .collect();
-    let recognized = segments.join(" ");
-    Ok(recognized)
-}
+//     let num_segments = ctx.full_n_segments();
+//     let segments: Vec<_> = (0..num_segments)
+//         .map(|i| ctx.full_get_segment_text(i).expect("failed to get segment"))
+//         .collect();
+//     let recognized = segments.join(" ");
+//     Ok(recognized)
+// }
