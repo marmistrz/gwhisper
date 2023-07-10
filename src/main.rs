@@ -22,6 +22,9 @@ struct Opt {
     /// The file containing the model
     #[arg(short, long, default_value_t = default_model())]
     model: String,
+    /// The language for transcription. Use `auto` for auto-detection.
+    #[arg(short, long, default_value_t = default_model())]
+    lang: String,
 }
 
 const CHANNELS: u16 = 1;
@@ -92,15 +95,22 @@ fn main() -> Result<(), anyhow::Error> {
     drop(stream);
     println!("Recording complete, len = {}!", audio.lock().unwrap().len());
 
-    let mut ctx = WhisperContext::new(&opt.model).expect("Failed to create WhisperContext");
-    let params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 10 });
-    ctx.full(params, audio.lock().unwrap().as_ref())
+    let ctx = WhisperContext::new(&opt.model).expect("Failed to create WhisperContext");
+    let mut params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
+    params.set_language(Some(&opt.lang));
+
+    let mut state = ctx.create_state().expect("test");
+    state
+        .full(params, audio.lock().unwrap().as_ref())
         .expect("full failed");
 
     let mut output = String::new();
-    let num_segments = ctx.full_n_segments();
+    let num_segments = state.full_n_segments().expect("FIXME");
+    println!("num segments: {}", num_segments);
     for i in 0..num_segments {
-        let segment = ctx.full_get_segment_text(i).expect("failed to get segment");
+        let segment = state
+            .full_get_segment_text(i)
+            .expect("failed to get segment");
         // let start_timestamp = ctx.full_get_segment_t0(i);
         // let end_timestamp = ctx.full_get_segment_t1(i);
         // println!("[{} - {}]: {}", start_timestamp, end_timestamp, segment);
