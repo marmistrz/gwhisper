@@ -1,3 +1,4 @@
+pub use cpal;
 use cpal::{
     traits::{DeviceTrait, StreamTrait},
     Stream,

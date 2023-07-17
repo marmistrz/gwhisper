@@ -4,17 +4,15 @@
 
 use anyhow::Context;
 use clap::Parser;
-use cpal::traits::{DeviceTrait, HostTrait};
-use cpal::{SampleFormat, SampleRate, SupportedStreamConfig};
+use gwhisper::recogntion::recognize;
+use gwhisper::recording::cpal;
+use cpal::{
+    traits::{DeviceTrait, HostTrait},
+    SampleFormat, SampleRate, SupportedStreamConfig,
+};
+use gwhisper::recording::Recorder;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-
-mod recording;
-mod recogntion;
-
-use recording::Recorder;
-
-use crate::recogntion::recognize;
 
 fn default_model() -> String {
     String::from("/usr/share/whisper.cpp-model-base.en/base.en.bin")

@@ -1,15 +1,5 @@
-[package]
-name = "gwhisper"
-version = "0.1.0"
-edition = "2021"
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = "1.0.69"
-clap = { version = "4.1.8", features = ["derive"] }
-cpal = "0.15.0"
-ctrlc = "3.4.0"
-derive-error = "0.0.5"
-derive-new = "0.5.9"
-whisper-rs = "0.8.0"
+members = [
+    "lib", "cli"
+    ]
