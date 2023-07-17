@@ -28,7 +28,7 @@ struct Opt {
     #[arg(short, long, default_value_t = default_model())]
     model: String,
     /// The language for transcription. Use `auto` for auto-detection.
-    #[arg(short, long, default_value_t = default_model())]
+    #[arg(short, long, default_value_t = String::from("auto"))]
     lang: String,
 }
 
