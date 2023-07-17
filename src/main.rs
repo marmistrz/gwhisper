@@ -8,11 +8,13 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{SampleFormat, SampleRate, SupportedStreamConfig};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use whisper_rs::{FullParams, WhisperContext};
 
 mod recording;
+mod recogntion;
 
 use recording::Recorder;
+
+use crate::recogntion::recognize;
 
 fn default_model() -> String {
     String::from("/usr/share/whisper.cpp-model-base.en/base.en.bin")
@@ -87,25 +89,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     println!("Recording complete, len = {}!", audio.len());
 
-    let ctx = WhisperContext::new(&opt.model).expect("Failed to create WhisperContext");
-    let mut params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
-    params.set_language(Some(&opt.lang));
-
-    let mut state = ctx.create_state().expect("test");
-    state.full(params, &audio).expect("full failed");
-
-    let mut output = String::new();
-    let num_segments = state.full_n_segments().expect("FIXME");
-    println!("num segments: {}", num_segments);
-    for i in 0..num_segments {
-        let segment = state
-            .full_get_segment_text(i)
-            .expect("failed to get segment");
-        // let start_timestamp = ctx.full_get_segment_t0(i);
-        // let end_timestamp = ctx.full_get_segment_t1(i);
-        // println!("[{} - {}]: {}", start_timestamp, end_timestamp, segment);
-        output.push_str(&segment)
-    }
+    let output = recognize(&audio, &opt.model, &opt.lang);
 
     println!("{}", output.trim());
 
