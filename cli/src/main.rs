@@ -4,7 +4,7 @@
 
 use anyhow::Context;
 use clap::Parser;
-use gwhisper::recogntion::recognize;
+use gwhisper::recogntion::Recognition;
 use gwhisper::recording::cpal;
 use cpal::{
     traits::{DeviceTrait, HostTrait},
@@ -38,6 +38,8 @@ const SAMPLE_FORMAT: SampleFormat = SampleFormat::F32;
 
 fn main() -> Result<(), anyhow::Error> {
     let opt = Opt::parse();
+    let recognition = Recognition::new(&opt.model)?;
+
     let host = cpal::default_host();
 
     // Set up the input device and stream with the default input config.
@@ -87,7 +89,8 @@ fn main() -> Result<(), anyhow::Error> {
 
     println!("Recording complete, len = {}!", audio.len());
 
-    let output = recognize(&audio, &opt.model, &opt.lang);
+    // TODO check if the model exists earlier on. Perhaps create the context earlier?
+    let output = recognition.recognize(&audio, &opt.lang);
 
     println!("{}", output.trim());
 
