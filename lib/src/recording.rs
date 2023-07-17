@@ -18,7 +18,7 @@ impl Recorder {
         self,
         device: &cpal::Device,
         config: &cpal::StreamConfig,
-    ) -> anyhow::Result<StartedRecorder> {
+    ) -> anyhow::Result<StartedRecorder> { // TODO use a proper error type and remove anyhow
         let err_fn = move |err| {
             eprintln!("an error occurred on stream: {}", err);
         };
@@ -50,6 +50,6 @@ pub struct StartedRecorder {
 impl StartedRecorder {
     pub fn stop(self) -> Audio {
         drop(self.stream);
-        self.audio.lock().unwrap().to_vec() // FIXME move
+        self.audio.lock().unwrap().to_vec() // TODO use option and move instead of copying
     }
 }
