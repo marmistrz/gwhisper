@@ -4,13 +4,8 @@
 
 use anyhow::Context;
 use clap::Parser;
-use gwhisper::recogntion::Recognition;
-use gwhisper::recording::cpal;
-use cpal::{
-    traits::{DeviceTrait, HostTrait},
-    SampleFormat, SampleRate, SupportedStreamConfig,
-};
-use gwhisper::recording::Recorder;
+use gwhisper::{recogntion::Recognition, recording};
+use gwhisper::recording::StoppedRecorder;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -32,45 +27,20 @@ struct Opt {
     lang: String,
 }
 
-const CHANNELS: u16 = 1;
-const SAMPLE_RATE: SampleRate = SampleRate(16000);
-const SAMPLE_FORMAT: SampleFormat = SampleFormat::F32;
-
 fn main() -> Result<(), anyhow::Error> {
     let opt = Opt::parse();
     let recognition = Recognition::new(&opt.model)?;
 
-    let host = cpal::default_host();
-
-    // Set up the input device and stream with the default input config.
-    let device = if opt.device == "default" {
-        host.default_input_device()
-    } else {
-        host.input_devices()?
-            .find(|x| x.name().map(|y| y == opt.device).unwrap_or(false))
-    }
-    .expect("failed to find input device");
-
-    println!("Input device: {}", device.name()?);
-
-    let config = device
-        .default_input_config()
-        .expect("Failed to get default input config");
-    let config = SupportedStreamConfig::new(
-        CHANNELS,
-        SAMPLE_RATE,
-        config.buffer_size().clone(),
-        SAMPLE_FORMAT,
-    );
+    let (device, config) = recording::whisper_config(&opt.device)?;
 
     println!("Default input config: {:?}", config);
 
     // A flag to indicate that recording is in progress.
     println!("Begin recording...");
 
-    let recorder = Recorder::default();
+    let recorder = StoppedRecorder::new(device, config.into());
     let recorder = recorder
-        .start(&device, &config.into())
+        .start()
         .context("recording")?;
 
     // Let recording go for roughly three seconds.

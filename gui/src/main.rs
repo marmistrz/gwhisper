@@ -6,7 +6,8 @@ use clap::Parser;
 
 use gtk::traits::{ButtonExt, GtkWindowExt};
 use gtk::{prelude::*, TextView};
-use gtk::{Application, ApplicationWindow, Button};
+use gtk::{ApplicationWindow, Button};
+use gwhisper::recording::{Recorder, self};
 use std::rc::Rc;
 
 const APP_NAME: &str = "gwhisper";
@@ -20,65 +21,84 @@ struct Opt {
     device: String,
 }
 
-// TODO use proper errors
-
 fn main() -> gtk::glib::ExitCode {
+    // Set up the input device and stream with the default input config.
+    let (device, config) = recording::whisper_config("default").expect("FIXME");
+
     // Create a new application
-    let app = Application::builder().application_id(APP_ID).build();
+    let app = gtk::Application::builder().application_id(APP_ID).build();
+    let res = Application {
+        recorder: Rc::new(Recorder::new(device, config.into())),
+    };
 
     // Connect to "activate" signal of `app`
-    app.connect_activate(build_ui);
+    app.connect_activate(move |app| res.build_ui(app));
 
     // Run the application
     app.run()
 }
 
-fn build_ui(app: &Application) {
-    let button = Button::builder()
-        .label("Press me!")
-        .margin_top(12)
-        .margin_bottom(12)
-        .margin_start(12)
-        .margin_end(12)
-        .build();
+struct Application {
+    recorder: Rc<Recorder>,
+}
 
-    let text_view = TextView::builder()
-        .margin_top(12)
-        .margin_bottom(12)
-        .margin_start(12)
-        .margin_end(12)
-        .valign(gtk::Align::Fill)
-        .editable(true)
-        .wrap_mode(gtk::WrapMode::Word)
-        .can_focus(true)
-        .focus_on_click(true)
-        .expand(true)
-        .build();
-    let text_view = Rc::new(text_view);
+impl Application {
+    fn build_ui(&self, app: &gtk::Application) {
+        let button = Button::builder()
+            .label("Press me!")
+            .margin_top(12)
+            .margin_bottom(12)
+            .margin_start(12)
+            .margin_end(12)
+            .build();
 
-    let layout = gtk::Box::builder()
-        .expand(true)
-        .orientation(gtk::Orientation::Vertical)
-        .build();
-    layout.pack_start(text_view.as_ref(), true, true, 0);
-    layout.pack_end(&button, false, false, 0);
+        let text_view = TextView::builder()
+            .margin_top(12)
+            .margin_bottom(12)
+            .margin_start(12)
+            .margin_end(12)
+            .valign(gtk::Align::Fill)
+            .editable(true)
+            .wrap_mode(gtk::WrapMode::Word)
+            .can_focus(true)
+            .focus_on_click(true)
+            .expand(true)
+            .build();
+        let text_view = Rc::new(text_view);
 
-    // Connect to "clicked" signal of `button`
-    button.connect_clicked(move |_| {
-        let voice = ""; // voice_recognition("default").expect("FIXME");
-        text_view.buffer().expect("buffer").set_text(&voice);
-    });
+        let layout = gtk::Box::builder()
+            .expand(true)
+            .orientation(gtk::Orientation::Vertical)
+            .build();
+        layout.pack_start(text_view.as_ref(), true, true, 0);
+        layout.pack_end(&button, false, false, 0);
 
-    // Create a window
-    let window = ApplicationWindow::builder()
-        .application(app)
-        .title(APP_NAME)
-        .child(&layout)
-        .default_height(600)
-        .default_width(800)
-        .build();
+        // Connect to "clicked" signal of `button`
+        let recorder = self.recorder.clone();
+        button.connect_clicked(move |_| {
+            match recorder {
+                Recorder::Stopped(recorder) => {
+                    recorder.start().expect("FIXME");
+                },
+                Recorder::Started(recorder) => {
+                    let voice = ""; // voice_recognition("default").expect("FIXME");
+                    text_view.buffer().expect("buffer").set_text(&voice);
+                }
+            };
 
-    // Present window
-    window.show_all();
-    window.present();
+        });
+
+        // Create a window
+        let window = ApplicationWindow::builder()
+            .application(app)
+            .title(APP_NAME)
+            .child(&layout)
+            .default_height(600)
+            .default_width(800)
+            .build();
+
+        // Present window
+        window.show_all();
+        window.present();
+    }
 }
