@@ -4,16 +4,14 @@
 
 use clap::Parser;
 
-use gtk::traits::{ButtonExt, GtkWindowExt};
-use gtk::{prelude::*, TextView};
-use gtk::{ApplicationWindow, Button};
+use gtk::traits::ButtonExt;
+use gtk::{prelude::*, Button, TextView};
 use gwhisper::recogntion::Recognition;
 use gwhisper::recording::{self, Recorder};
 use std::rc::Rc;
 use std::sync::Mutex;
 
 const APP_NAME: &str = "gwhisper";
-const APP_ID: &str = "com.marmistrz.GWhisper";
 
 #[derive(Parser, Debug)]
 #[command(version, about = APP_NAME, long_about = None)]
@@ -23,24 +21,23 @@ struct Opt {
     device: String,
 }
 
-fn main() -> gtk::glib::ExitCode {
+fn main() {
     // Set up the input device and stream with the default input config.
     let (device, config) = recording::whisper_config("default").expect("FIXME");
 
     // Create a new application
-    let app = gtk::Application::builder().application_id(APP_ID).build();
-    let res = Application {
+    let app = Application {
         recorder: Rc::new(Mutex::new(Recorder::new(device, config.into()))),
         recognition: Rc::new(
             Recognition::new("/usr/share/whisper.cpp-model-base.en/base.en.bin").expect("FIXME"),
         ), // FIXME
     };
 
-    // Connect to "activate" signal of `app`
-    app.connect_activate(move |app| res.build_ui(app));
-
-    // Run the application
-    app.run()
+    if gtk::init().is_err() {
+        panic!("Failed to initialize GTK.");
+    }
+    app.setup();
+    gtk::main()
 }
 
 struct Application {
@@ -48,41 +45,39 @@ struct Application {
     recognition: Rc<Recognition>,
 }
 
-impl Application {
-    fn build_ui(&self, app: &gtk::Application) {
-        let button = Button::builder()
-            .label("Press me!")
-            .margin_top(12)
-            .margin_bottom(12)
-            .margin_start(12)
-            .margin_end(12)
-            .build();
+struct Ui {
+    button: Rc<Button>,
+    text_view: Rc<TextView>,
+    window: gtk::Window,
+}
+
+impl Default for Ui {
+    fn default() -> Self {
+        let glade_src = include_str!("gwhisper.glade");
+        let builder = gtk::Builder::from_string(glade_src);
+
+        let button: Button = builder.object("recognition_button").unwrap();
         let button = Rc::new(button);
 
-        let text_view = TextView::builder()
-            .margin_top(12)
-            .margin_bottom(12)
-            .margin_start(12)
-            .margin_end(12)
-            .valign(gtk::Align::Fill)
-            .editable(true)
-            .wrap_mode(gtk::WrapMode::Word)
-            .can_focus(true)
-            .focus_on_click(true)
-            .expand(true)
-            .build();
+        let text_view: TextView = builder.object("text_view").unwrap();
         let text_view = Rc::new(text_view);
 
-        let layout = gtk::Box::builder()
-            .expand(true)
-            .orientation(gtk::Orientation::Vertical)
-            .build();
-        layout.pack_start(text_view.as_ref(), true, true, 0);
-        layout.pack_end(button.as_ref(), false, false, 0);
+        let window: gtk::Window = builder.object("window").unwrap();
 
+        Self {
+            button,
+            text_view,
+            window,
+        }
+    }
+}
+
+impl Application {
+    fn setup(&self) {
+        let ui = Ui::default();
         // Connect to "clicked" signal of `button`
-        button.connect_clicked({
-            let button = button.clone();
+        ui.button.connect_clicked({
+            let button = ui.button.clone();
             let recorder = self.recorder.clone();
             let recognition = self.recognition.clone();
             move |_| {
@@ -93,7 +88,7 @@ impl Application {
                 } else {
                     let audio = recorder.stop();
                     let text = recognition.recognize(&audio, "en");
-                    let buffer = text_view.buffer().expect("buffer");
+                    let buffer = ui.text_view.buffer().expect("buffer");
                     let mut end = buffer.end_iter();
                     buffer.insert(&mut end, &text);
                 }
@@ -101,16 +96,21 @@ impl Application {
         });
 
         // Create a window
-        let window = ApplicationWindow::builder()
-            .application(app)
-            .title(APP_NAME)
-            .child(&layout)
-            .default_height(600)
-            .default_width(800)
-            .build();
 
         // Present window
-        window.show_all();
-        window.present();
+        ui.window.show_all();
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    pub fn ui_labels() {
+        if gtk::init().is_err() {
+            panic!("Failed to initialize GTK.");
+        }
+        let _ = Ui::default();
     }
 }
