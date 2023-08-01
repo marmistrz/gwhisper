@@ -1,30 +1,36 @@
 pub use cpal;
 use cpal::{
-    traits::{DeviceTrait, StreamTrait, HostTrait},
-    Stream, Device, StreamConfig, SupportedStreamConfig, SampleRate, SampleFormat,
+    traits::{DeviceTrait, HostTrait, StreamTrait},
+    Device, SampleFormat, SampleRate, Stream, SupportedStreamConfig, StreamConfig,
 };
 use std::sync::{Arc, Mutex};
 
 type Audio = Vec<f32>;
 type AudioContainer = Arc<Mutex<Audio>>;
 
-pub struct StoppedRecorder {
+pub struct Recorder {
     audio: AudioContainer,
-    device: cpal::Device,
-    config: cpal::StreamConfig,
+    device: Device,
+    config: StreamConfig,
+    stream: Option<Stream>,
 }
 
-impl StoppedRecorder {
+impl Recorder {
     pub fn new(device: cpal::Device, config: cpal::StreamConfig) -> Self {
         Self {
             audio: Default::default(),
             device,
             config,
+            stream: None,
         }
     }
 
-    pub fn start(self) -> anyhow::Result<StartedRecorder> {
-        // TODO use a proper error type and remove anyhow
+    pub fn is_stopped(&self) -> bool {
+        self.stream.is_none()
+    }
+
+    pub fn start(&mut self) -> anyhow::Result<()> {
+        assert!(self.stream.is_none());
         let err_fn = move |err| {
             eprintln!("an error occurred on stream: {}", err);
         };
@@ -40,53 +46,18 @@ impl StoppedRecorder {
         };
 
         stream.play()?;
+        self.stream = Some(stream);
 
-        Ok(StartedRecorder {
-            audio: self.audio,
-            stream,
-        })
-    }
-}
-
-pub struct StartedRecorder {
-    audio: AudioContainer,
-    stream: Stream,
-}
-
-impl StartedRecorder {
-    pub fn stop(self) -> Audio {
-        drop(self.stream);
-        self.audio.lock().unwrap().to_vec() // TODO use option and move instead of copying
-    }
-}
-
-pub enum Recorder {
-    Stopped(StoppedRecorder),
-    Started(StartedRecorder),
-}
-
-impl Recorder {
-    pub fn new(device: cpal::Device, config: cpal::StreamConfig) -> Self {
-        Self::Stopped(StoppedRecorder::new(device, config))
+        Ok(())
     }
 
-    pub fn start(self) -> anyhow::Result<Recorder> {
-        if let Self::Stopped(recorder) = self {
-            Ok(Self::Started(recorder.start()?))
-        } else {
-            panic!("Recorder should be stopped")
-        }
-    }
-
-    pub fn stop(self) -> anyhow::Result<(Recorder, Audio)> {
-        if let Self::Started(recorder) = self {
-            Ok(Self::Stopped(recorder.stop()?))
-        } else {
-            panic!("Recorder should be stopped")
-        }
+    pub fn stop(&mut self) -> Audio {
+        let stream = self.stream.take().expect("Recorder should be started");
+        drop(stream);
+        let audio = self.audio.lock().unwrap().clone(); // FIXME move
+        audio
     }
 }
-
 
 // whisper-specfic stuff below
 const CHANNELS: u16 = 1;

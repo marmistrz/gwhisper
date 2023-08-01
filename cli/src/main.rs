@@ -5,7 +5,7 @@
 use anyhow::Context;
 use clap::Parser;
 use gwhisper::{recogntion::Recognition, recording};
-use gwhisper::recording::StoppedRecorder;
+use gwhisper::recording::Recorder;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -38,8 +38,8 @@ fn main() -> Result<(), anyhow::Error> {
     // A flag to indicate that recording is in progress.
     println!("Begin recording...");
 
-    let recorder = StoppedRecorder::new(device, config.into());
-    let recorder = recorder
+    let mut recorder = Recorder::new(device, config.into());
+    recorder
         .start()
         .context("recording")?;
 

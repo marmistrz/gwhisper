@@ -7,8 +7,10 @@ use clap::Parser;
 use gtk::traits::{ButtonExt, GtkWindowExt};
 use gtk::{prelude::*, TextView};
 use gtk::{ApplicationWindow, Button};
-use gwhisper::recording::{Recorder, self};
+use gwhisper::recogntion::Recognition;
+use gwhisper::recording::{self, Recorder};
 use std::rc::Rc;
+use std::sync::Mutex;
 
 const APP_NAME: &str = "gwhisper";
 const APP_ID: &str = "com.marmistrz.GWhisper";
@@ -28,7 +30,10 @@ fn main() -> gtk::glib::ExitCode {
     // Create a new application
     let app = gtk::Application::builder().application_id(APP_ID).build();
     let res = Application {
-        recorder: Rc::new(Recorder::new(device, config.into())),
+        recorder: Rc::new(Mutex::new(Recorder::new(device, config.into()))),
+        recognition: Rc::new(
+            Recognition::new("/usr/share/whisper.cpp-model-base.en/base.en.bin").expect("FIXME"),
+        ), // FIXME
     };
 
     // Connect to "activate" signal of `app`
@@ -39,7 +44,8 @@ fn main() -> gtk::glib::ExitCode {
 }
 
 struct Application {
-    recorder: Rc<Recorder>,
+    recorder: Rc<Mutex<Recorder>>,
+    recognition: Rc<Recognition>,
 }
 
 impl Application {
@@ -51,6 +57,7 @@ impl Application {
             .margin_start(12)
             .margin_end(12)
             .build();
+        let button = Rc::new(button);
 
         let text_view = TextView::builder()
             .margin_top(12)
@@ -71,21 +78,26 @@ impl Application {
             .orientation(gtk::Orientation::Vertical)
             .build();
         layout.pack_start(text_view.as_ref(), true, true, 0);
-        layout.pack_end(&button, false, false, 0);
+        layout.pack_end(button.as_ref(), false, false, 0);
 
         // Connect to "clicked" signal of `button`
-        let recorder = self.recorder.clone();
-        button.connect_clicked(move |_| {
-            match recorder {
-                Recorder::Stopped(recorder) => {
+        button.connect_clicked({
+            let button = button.clone();
+            let recorder = self.recorder.clone();
+            let recognition = self.recognition.clone();
+            move |_| {
+                let mut recorder = recorder.lock().unwrap();
+                if recorder.is_stopped() {
                     recorder.start().expect("FIXME");
-                },
-                Recorder::Started(recorder) => {
-                    let voice = ""; // voice_recognition("default").expect("FIXME");
-                    text_view.buffer().expect("buffer").set_text(&voice);
+                    button.set_label("Recording");
+                } else {
+                    let audio = recorder.stop();
+                    let text = recognition.recognize(&audio, "en");
+                    let buffer = text_view.buffer().expect("buffer");
+                    let mut end = buffer.end_iter();
+                    buffer.insert(&mut end, &text);
                 }
-            };
-
+            }
         });
 
         // Create a window
