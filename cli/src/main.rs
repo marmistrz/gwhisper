@@ -29,7 +29,7 @@ struct Opt {
 
 fn main() -> Result<(), anyhow::Error> {
     let opt = Opt::parse();
-    let recognition = Recognition::new(&opt.model)?;
+    let mut recognition = Recognition::new(&opt.model)?;
 
     let (device, config) = recording::whisper_config(&opt.device)?;
 
@@ -60,7 +60,8 @@ fn main() -> Result<(), anyhow::Error> {
     println!("Recording complete, len = {}!", audio.len());
 
     // TODO check if the model exists earlier on. Perhaps create the context earlier?
-    let output = recognition.recognize(&audio, &opt.lang);
+    recognition.set_lang(&opt.lang);
+    let output = recognition.recognize(&audio);
 
     println!("{}", output.trim());
 

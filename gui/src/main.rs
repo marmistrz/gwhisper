@@ -25,12 +25,11 @@ fn main() {
     // Set up the input device and stream with the default input config.
     let (device, config) = recording::whisper_config("default").expect("FIXME");
 
-    // Create a new application
+    let recorder = Recorder::new(device, config.into());
+    let recognition = Recognition::new("/home/marcin/build/whisper.cpp/models/ggml-medium.bin").expect("FIXME");
     let app = Application {
-        recorder: Rc::new(Mutex::new(Recorder::new(device, config.into()))),
-        recognition: Rc::new(
-            Recognition::new("/usr/share/whisper.cpp-model-base.en/base.en.bin").expect("FIXME"),
-        ), // FIXME
+        recorder: Rc::new(Mutex::new(recorder)),
+        recognition: Rc::new(Mutex::new(recognition)),
     };
 
     if gtk::init().is_err() {
@@ -42,13 +41,14 @@ fn main() {
 
 struct Application {
     recorder: Rc<Mutex<Recorder>>,
-    recognition: Rc<Recognition>,
+    recognition: Rc<Mutex<Recognition>>,
 }
 
 struct Ui {
     button: Rc<Button>,
     text_view: Rc<TextView>,
     window: gtk::Window,
+    lang_combo_box: gtk::ComboBoxText,
 }
 
 impl Default for Ui {
@@ -63,14 +63,19 @@ impl Default for Ui {
         let text_view = Rc::new(text_view);
 
         let window: gtk::Window = builder.object("window").unwrap();
+        let lang_combo_box = builder.object("lang_combo_box").unwrap();
 
         Self {
             button,
             text_view,
             window,
+            lang_combo_box,
         }
     }
 }
+
+// FIXME there are more of them
+const LANGS: &[&'static str] = &["pl", "en"];
 
 impl Application {
     fn setup(&self) {
@@ -84,19 +89,33 @@ impl Application {
                 let mut recorder = recorder.lock().unwrap();
                 if recorder.is_stopped() {
                     recorder.start().expect("FIXME");
-                    button.set_label("Recording");
+                    button.set_label("Recording...");
                 } else {
+                    button.set_sensitive(false);
                     let audio = recorder.stop();
-                    let text = recognition.recognize(&audio, "en");
+                    // TODO spin a thread
+                    // TODO progress bar, but it requires extern C callbacks
+                    let text = recognition.lock().unwrap().recognize(&audio);
+                    button.set_sensitive(true);
                     let buffer = ui.text_view.buffer().expect("buffer");
                     let mut end = buffer.end_iter();
                     buffer.insert(&mut end, &text);
+                    button.set_label("Record");
                 }
             }
         });
 
-        // Create a window
-
+        for lang in LANGS {
+            ui.lang_combo_box.append_text(lang);
+            // TODO set default as active
+        }
+        ui.lang_combo_box.connect_changed({
+            let recognition = self.recognition.clone();
+            move |combo| {
+                let lang = combo.active_text().expect("should be selected");
+                recognition.lock().unwrap().set_lang(lang.as_str());
+            }
+        });
         // Present window
         ui.window.show_all();
     }
