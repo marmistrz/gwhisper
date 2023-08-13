@@ -5,7 +5,7 @@
 use clap::Parser;
 
 use gtk::traits::ButtonExt;
-use gtk::{prelude::*, Button, TextView};
+use gtk::{prelude::*, Button, Clipboard, TextView};
 use gwhisper::recogntion::Recognition;
 use gwhisper::recording::{self, Recorder};
 use std::rc::Rc;
@@ -48,6 +48,7 @@ struct Application {
 
 struct Ui {
     button: Rc<Button>,
+    copy_button: Rc<Button>,
     text_view: Rc<TextView>,
     window: gtk::Window,
     lang_combo_box: gtk::ComboBoxText,
@@ -61,6 +62,9 @@ impl Default for Ui {
         let button: Button = builder.object("recognition_button").unwrap();
         let button = Rc::new(button);
 
+        let copy_button: Button = builder.object("copy_button").unwrap();
+        let copy_button = Rc::new(copy_button);
+
         let text_view: TextView = builder.object("text_view").unwrap();
         let text_view = Rc::new(text_view);
 
@@ -72,6 +76,7 @@ impl Default for Ui {
             text_view,
             window,
             lang_combo_box,
+            copy_button,
         }
     }
 }
@@ -86,9 +91,10 @@ impl Application {
 
         data_rx.attach(None, {
             let button = ui.button.clone();
+            let text_view = ui.text_view.clone();
             move |text: String| {
                 button.set_sensitive(true);
-                let buffer = ui.text_view.buffer().expect("buffer");
+                let buffer = text_view.buffer().expect("buffer");
                 let mut end = buffer.end_iter();
                 buffer.insert(&mut end, &text);
                 button.set_label("Record");
@@ -134,6 +140,19 @@ impl Application {
                 recognition.lock().unwrap().set_lang(lang.as_str());
             }
         });
+
+        let clipboard = Clipboard::get(&gdk::SELECTION_CLIPBOARD);
+        ui.copy_button.connect_clicked({
+            let text_view = ui.text_view.clone();
+            move |_| {
+                let buffer = text_view.buffer().expect("textview buffer");
+                let text = buffer
+                    .text(&buffer.start_iter(), &buffer.end_iter(), true)
+                    .expect("buffer text");
+                clipboard.set_text(text.as_str());
+            }
+        });
+
         // Present window
         ui.window.show_all();
     }
