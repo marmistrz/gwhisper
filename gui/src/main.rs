@@ -9,7 +9,8 @@ use gtk::{prelude::*, Button, TextView};
 use gwhisper::recogntion::Recognition;
 use gwhisper::recording::{self, Recorder};
 use std::rc::Rc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 const APP_NAME: &str = "gwhisper";
 
@@ -26,10 +27,11 @@ fn main() {
     let (device, config) = recording::whisper_config("default").expect("FIXME");
 
     let recorder = Recorder::new(device, config.into());
-    let recognition = Recognition::new("/home/marcin/build/whisper.cpp/models/ggml-medium.bin").expect("FIXME");
+    let recognition =
+        Recognition::new("/home/marcin/build/whisper.cpp/models/ggml-base.en.bin").expect("FIXME");
     let app = Application {
         recorder: Rc::new(Mutex::new(recorder)),
-        recognition: Rc::new(Mutex::new(recognition)),
+        recognition: Arc::new(Mutex::new(recognition)),
     };
 
     if gtk::init().is_err() {
@@ -41,7 +43,7 @@ fn main() {
 
 struct Application {
     recorder: Rc<Mutex<Recorder>>,
-    recognition: Rc<Mutex<Recognition>>,
+    recognition: Arc<Mutex<Recognition>>,
 }
 
 struct Ui {
@@ -80,6 +82,21 @@ const LANGS: &[&'static str] = &["pl", "en"];
 impl Application {
     fn setup(&self) {
         let ui = Ui::default();
+        let (data_tx, data_rx) = glib::MainContext::channel(glib::Priority::DEFAULT);
+
+        data_rx.attach(None, {
+            let button = ui.button.clone();
+            move |text: String| {
+                button.set_sensitive(true);
+                let buffer = ui.text_view.buffer().expect("buffer");
+                let mut end = buffer.end_iter();
+                buffer.insert(&mut end, &text);
+                button.set_label("Record");
+
+                glib::ControlFlow::Continue
+            }
+        });
+
         // Connect to "clicked" signal of `button`
         ui.button.connect_clicked({
             let button = ui.button.clone();
@@ -93,14 +110,15 @@ impl Application {
                 } else {
                     button.set_sensitive(false);
                     let audio = recorder.stop();
-                    // TODO spin a thread
                     // TODO progress bar, but it requires extern C callbacks
-                    let text = recognition.lock().unwrap().recognize(&audio);
-                    button.set_sensitive(true);
-                    let buffer = ui.text_view.buffer().expect("buffer");
-                    let mut end = buffer.end_iter();
-                    buffer.insert(&mut end, &text);
-                    button.set_label("Record");
+                    thread::spawn({
+                        let recognition = recognition.clone();
+                        let tx = data_tx.clone();
+                        move || {
+                            let text = recognition.lock().unwrap().recognize(&audio);
+                            tx.send(text).expect("channel error");
+                        }
+                    });
                 }
             }
         });
