@@ -1,4 +1,4 @@
-use whisper_rs::{FullParams, WhisperContext, WhisperError};
+use whisper_rs::{get_lang_str, FullParams, WhisperContext, WhisperError};
 
 pub struct Recognition {
     ctx: WhisperContext,
@@ -39,4 +39,9 @@ impl Recognition {
 
         output
     }
+}
+
+pub fn all_langs() -> impl Iterator<Item = &'static str> {
+    let num_langs = whisper_rs::get_lang_max_id();
+    (0..num_langs).map(|id| get_lang_str(id).expect(&format!("No lang name for id = {}", id)))
 }

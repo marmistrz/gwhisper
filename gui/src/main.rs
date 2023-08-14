@@ -6,7 +6,7 @@ use clap::Parser;
 
 use gtk::traits::ButtonExt;
 use gtk::{prelude::*, Button, Clipboard, TextView};
-use gwhisper::recogntion::Recognition;
+use gwhisper::recogntion::{Recognition, all_langs};
 use gwhisper::recording::{self, Recorder};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -28,7 +28,7 @@ fn main() {
 
     let recorder = Recorder::new(device, config.into());
     let recognition =
-        Recognition::new("/home/marcin/build/whisper.cpp/models/ggml-base.en.bin").expect("FIXME");
+        Recognition::new("/home/marcin/build/whisper.cpp/models/ggml-medium.bin").expect("FIXME");
     let app = Application {
         recorder: Rc::new(Mutex::new(recorder)),
         recognition: Arc::new(Mutex::new(recognition)),
@@ -81,9 +81,6 @@ impl Default for Ui {
     }
 }
 
-// FIXME there are more of them
-const LANGS: &[&'static str] = &["pl", "en"];
-
 impl Application {
     fn setup(&self) {
         let ui = Ui::default();
@@ -129,7 +126,7 @@ impl Application {
             }
         });
 
-        for lang in LANGS {
+        for lang in all_langs() {
             ui.lang_combo_box.append_text(lang);
             // TODO set default as active
         }
