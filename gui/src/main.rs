@@ -112,8 +112,7 @@ impl Application {
             move |text: String| {
                 ui.record_button.set_sensitive(true);
                 let buffer = ui.text_view.buffer().expect("buffer");
-                let mut end = buffer.end_iter();
-                buffer.insert(&mut end, &text);
+                buffer.set_text(&text);
                 ui.record_button.set_label("Record");
 
                 glib::ControlFlow::Continue
