@@ -84,9 +84,23 @@ impl Application {
     fn set_model(recognition: &mut Option<Recognition>, ui: &Ui, model: &Path) {
         let path = model.to_str().expect("invalid utf8");
 
-        *recognition = Some(Recognition::new(path).expect("FIXME proper error handling"));
-        ui.model_label.set_text(&format!("Model: {}", path));
-        ui.record_button.set_sensitive(true);
+        match Recognition::new(path) {
+            Ok(rec) => {
+                *recognition = Some(rec);
+                ui.model_label.set_text(&format!("Model: {}", path));
+                ui.record_button.set_sensitive(true);
+            }
+            Err(e) => {
+                let dialog = gtk::MessageDialog::builder()
+                    .parent(&ui.window)
+                    .message_type(gtk::MessageType::Error)
+                    .text(e.to_string())
+                    .buttons(gtk::ButtonsType::Ok)
+                    .build();
+                dialog.run();
+                dialog.close();
+            }
+        }
     }
 
     fn setup(&self) {
@@ -176,15 +190,15 @@ impl Application {
                 dialog.add_button("OK", ResponseType::Accept);
                 dialog.add_button("Cancel", ResponseType::Cancel);
 
-                if let ResponseType::Accept = dialog.run() {
+                let resp = dialog.run();
+                dialog.close(); // FIXME: the dialog is not really closed in case of an error. Perhaps idle_add or sth?
+                if let ResponseType::Accept = resp {
                     let model = dialog
                         .filename()
                         .expect("TODO: when can the filename be none?");
                     let mut guard = recognition.lock().unwrap();
-                    Self::set_model(&mut *guard, ui.as_ref(), &model)
+                    Self::set_model(&mut *guard, ui.as_ref(), &model);
                 }
-
-                dialog.close(); // TODO why is this needed?
             }
         });
 
