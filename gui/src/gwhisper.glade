@@ -20,6 +20,7 @@
               <object class="GtkTextView" id="text_view">
                 <property name="visible">True</property>
                 <property name="can-focus">True</property>
+                <property name="wrap-mode">word</property>
               </object>
               <packing>
                 <property name="expand">True</property>
