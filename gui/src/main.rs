@@ -5,9 +5,10 @@
 use clap::Parser;
 
 use gtk::traits::ButtonExt;
-use gtk::{prelude::*, Button, Clipboard, TextView};
-use gwhisper::recogntion::{Recognition, all_langs};
+use gtk::{prelude::*, Button, Clipboard, FileChooserDialog, ResponseType, TextView};
+use gwhisper::recogntion::{all_langs, Recognition};
 use gwhisper::recording::{self, Recorder};
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -27,11 +28,9 @@ fn main() {
     let (device, config) = recording::whisper_config("default").expect("FIXME");
 
     let recorder = Recorder::new(device, config.into());
-    let recognition =
-        Recognition::new("/home/marcin/build/whisper.cpp/models/ggml-medium.bin").expect("FIXME");
     let app = Application {
         recorder: Rc::new(Mutex::new(recorder)),
-        recognition: Arc::new(Mutex::new(recognition)),
+        recognition: Arc::new(Mutex::new(None)),
     };
 
     if gtk::init().is_err() {
@@ -43,15 +42,17 @@ fn main() {
 
 struct Application {
     recorder: Rc<Mutex<Recorder>>,
-    recognition: Arc<Mutex<Recognition>>,
+    recognition: Arc<Mutex<Option<Recognition>>>,
 }
 
 struct Ui {
-    button: Rc<Button>,
-    copy_button: Rc<Button>,
-    text_view: Rc<TextView>,
+    record_button: Button,
+    copy_button: Button,
+    text_view: TextView,
     window: gtk::Window,
     lang_combo_box: gtk::ComboBoxText,
+    model_label: gtk::Label,
+    model_choice_button: gtk::Button,
 }
 
 impl Default for Ui {
@@ -59,66 +60,74 @@ impl Default for Ui {
         let glade_src = include_str!("gwhisper.glade");
         let builder = gtk::Builder::from_string(glade_src);
 
-        let button: Button = builder.object("recognition_button").unwrap();
-        let button = Rc::new(button);
-
+        let record_button: Button = builder.object("recognition_button").unwrap();
         let copy_button: Button = builder.object("copy_button").unwrap();
-        let copy_button = Rc::new(copy_button);
-
         let text_view: TextView = builder.object("text_view").unwrap();
-        let text_view = Rc::new(text_view);
-
         let window: gtk::Window = builder.object("window").unwrap();
         let lang_combo_box = builder.object("lang_combo_box").unwrap();
+        let model_label = builder.object("model_label").unwrap();
+        let model_choice_button = builder.object("model_choice_button").unwrap();
 
         Self {
-            button,
+            record_button,
             text_view,
             window,
             lang_combo_box,
             copy_button,
+            model_label,
+            model_choice_button,
         }
     }
 }
 
 impl Application {
+    fn set_model(recognition: &mut Option<Recognition>, ui: &Ui, model: &Path) {
+        let path = model.to_str().expect("invalid utf8");
+
+        *recognition = Some(Recognition::new(path).expect("FIXME proper error handling"));
+        ui.model_label.set_text(&format!("Model: {}", path));
+        ui.record_button.set_sensitive(true);
+    }
+
     fn setup(&self) {
-        let ui = Ui::default();
+        let ui = Rc::new(Ui::default());
         let (data_tx, data_rx) = glib::MainContext::channel(glib::Priority::DEFAULT);
 
         data_rx.attach(None, {
-            let button = ui.button.clone();
-            let text_view = ui.text_view.clone();
+            let ui = ui.clone();
             move |text: String| {
-                button.set_sensitive(true);
-                let buffer = text_view.buffer().expect("buffer");
+                ui.record_button.set_sensitive(true);
+                let buffer = ui.text_view.buffer().expect("buffer");
                 let mut end = buffer.end_iter();
                 buffer.insert(&mut end, &text);
-                button.set_label("Record");
+                ui.record_button.set_label("Record");
 
                 glib::ControlFlow::Continue
             }
         });
 
-        // Connect to "clicked" signal of `button`
-        ui.button.connect_clicked({
-            let button = ui.button.clone();
+        ui.record_button.connect_clicked({
+            let ui = ui.clone();
             let recorder = self.recorder.clone();
             let recognition = self.recognition.clone();
             move |_| {
                 let mut recorder = recorder.lock().unwrap();
                 if recorder.is_stopped() {
                     recorder.start().expect("FIXME");
-                    button.set_label("Recording...");
+                    ui.record_button.set_label("Recording...");
                 } else {
-                    button.set_sensitive(false);
+                    ui.record_button.set_sensitive(false);
                     let audio = recorder.stop();
-                    // TODO progress bar, but it requires extern C callbacks
                     thread::spawn({
                         let recognition = recognition.clone();
                         let tx = data_tx.clone();
                         move || {
-                            let text = recognition.lock().unwrap().recognize(&audio);
+                            let text = recognition
+                                .lock()
+                                .unwrap()
+                                .as_ref()
+                                .expect("record button should be insensitive")
+                                .recognize(&audio);
                             tx.send(text).expect("channel error");
                         }
                     });
@@ -134,15 +143,20 @@ impl Application {
             let recognition = self.recognition.clone();
             move |combo| {
                 let lang = combo.active_text().expect("should be selected");
-                recognition.lock().unwrap().set_lang(lang.as_str());
+                recognition
+                    .lock()
+                    .unwrap()
+                    .as_mut()
+                    .expect("model not initialized")
+                    .set_lang(lang.as_str());
             }
         });
 
         let clipboard = Clipboard::get(&gdk::SELECTION_CLIPBOARD);
         ui.copy_button.connect_clicked({
-            let text_view = ui.text_view.clone();
+            let ui = ui.clone();
             move |_| {
-                let buffer = text_view.buffer().expect("textview buffer");
+                let buffer = ui.text_view.buffer().expect("textview buffer");
                 let text = buffer
                     .text(&buffer.start_iter(), &buffer.end_iter(), true)
                     .expect("buffer text");
@@ -150,8 +164,33 @@ impl Application {
             }
         });
 
+        ui.model_choice_button.connect_clicked({
+            let recognition = self.recognition.clone();
+            let ui = ui.clone();
+            move |_| {
+                let dialog = FileChooserDialog::new(
+                    Some("Open model"),
+                    Some(&ui.window),
+                    gtk::FileChooserAction::Open,
+                );
+                dialog.add_button("OK", ResponseType::Accept);
+                dialog.add_button("Cancel", ResponseType::Cancel);
+
+                if let ResponseType::Accept = dialog.run() {
+                    let model = dialog
+                        .filename()
+                        .expect("TODO: when can the filename be none?");
+                    let mut guard = recognition.lock().unwrap();
+                    Self::set_model(&mut *guard, ui.as_ref(), &model)
+                }
+
+                dialog.close(); // TODO why is this needed?
+            }
+        });
+
         // Present window
         ui.window.show_all();
+        // TODO the executable should terminate when the window is closed
     }
 }
 
