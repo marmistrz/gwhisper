@@ -140,7 +140,8 @@ impl Application {
                                 .unwrap()
                                 .as_ref()
                                 .expect("record button should be insensitive")
-                                .recognize(&audio);
+                                .recognize(&audio)
+                                .expect("TODO: show a dialog for whisper error");
                             tx.send(text).expect("channel error");
                         }
                     });

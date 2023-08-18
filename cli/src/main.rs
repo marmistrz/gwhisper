@@ -4,8 +4,8 @@
 
 use anyhow::Context;
 use clap::Parser;
-use gwhisper::{recogntion::Recognition, recording};
 use gwhisper::recording::Recorder;
+use gwhisper::{recogntion::Recognition, recording};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -39,9 +39,7 @@ fn main() -> Result<(), anyhow::Error> {
     println!("Begin recording...");
 
     let mut recorder = Recorder::new(device, config.into());
-    recorder
-        .start()
-        .context("recording")?;
+    recorder.start().context("recording")?;
 
     // Let recording go for roughly three seconds.
     let running = Arc::new(AtomicBool::new(true));
@@ -61,7 +59,7 @@ fn main() -> Result<(), anyhow::Error> {
 
     // TODO check if the model exists earlier on. Perhaps create the context earlier?
     recognition.set_lang(&opt.lang);
-    let output = recognition.recognize(&audio);
+    let output = recognition.recognize(&audio).expect("whisper error");
 
     println!("{}", output.trim());
 

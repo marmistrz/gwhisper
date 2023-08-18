@@ -20,24 +20,22 @@ impl Recognition {
         self.lang = lang.to_owned();
     }
 
-    pub fn recognize(&self, audio: &[f32]) -> String {
+    pub fn recognize(&self, audio: &[f32]) -> Result<String, WhisperError> {
         let mut params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
         params.set_language(Some(&self.lang));
 
-        let mut state = self.ctx.create_state().expect("test");
-        state.full(params, &audio).expect("full failed");
+        let mut state = self.ctx.create_state()?;
+        state.full(params, &audio)?;
 
         let mut output = String::new();
-        let num_segments = state.full_n_segments().expect("FIXME");
+        let num_segments = state.full_n_segments()?;
         println!("num segments: {}", num_segments);
         for i in 0..num_segments {
-            let segment = state
-                .full_get_segment_text(i)
-                .expect("failed to get segment");
+            let segment = state.full_get_segment_text(i)?;
             output.push_str(&segment)
         }
 
-        output
+        Ok(output)
     }
 }
 
