@@ -9,6 +9,7 @@ const DEFAULT_LANG: &str = "auto";
 
 impl Recognition {
     pub fn new(model: &str) -> Result<Self, WhisperError> {
+        println!("whisper system info: {}", whisper_rs::print_system_info());
         let ctx = WhisperContext::new(model)?;
         Ok(Self {
             ctx,
