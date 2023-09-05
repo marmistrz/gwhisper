@@ -24,6 +24,7 @@ impl Recognition {
     pub fn recognize(&self, audio: &[f32]) -> Result<String, WhisperError> {
         let mut params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
         params.set_language(Some(&self.lang));
+        params.set_no_context(true);
 
         let mut state = self.ctx.create_state()?;
         state.full(params, &audio)?;

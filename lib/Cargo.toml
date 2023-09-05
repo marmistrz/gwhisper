@@ -11,3 +11,7 @@ cpal = "0.15.0"
 derive-error = "0.0.5"
 derive-new = "0.5.9"
 whisper-rs = "0.8.0"
+
+[features]
+cuda = ["whisper-rs/cuda"]
+opencl = ["whisper-rs/opencl"]
