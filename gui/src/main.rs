@@ -5,9 +5,13 @@
 use clap::Parser;
 
 use gtk::traits::ButtonExt;
-use gtk::{prelude::*, Button, Clipboard, FileChooserDialog, ResponseType, TextView};
+use gtk::{
+    prelude::*, ApplicationWindow, Button, Clipboard, FileChooserDialog, ResponseType, TextView,
+};
 use gwhisper::recogntion::{all_langs, Recognition};
 use gwhisper::recording::{self, Recorder};
+use relm::{connect, Update, Widget};
+use relm_derive::Msg;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -28,7 +32,7 @@ fn main() {
     let (device, config) = recording::whisper_config("default").expect("FIXME");
 
     let recorder = Recorder::new(device, config.into());
-    let app = Application {
+    let app = Resources {
         recorder: Rc::new(Mutex::new(recorder)),
         recognition: Arc::new(Mutex::new(None)),
     };
@@ -36,39 +40,101 @@ fn main() {
     if gtk::init().is_err() {
         panic!("Failed to initialize GTK.");
     }
-    app.setup();
+    Ui::run(()).expect("run failed");
     gtk::main()
 }
 
-struct Application {
+struct Resources {
     recorder: Rc<Mutex<Recorder>>,
     recognition: Arc<Mutex<Option<Recognition>>>,
 }
 
+struct App {
+    resources: Resources,
+    ui: Ui,
+}
+
+#[derive(Msg)]
+enum Msg {
+    ToggleRecord,
+    // Quit,
+}
+
+#[derive(Clone)]
 struct Ui {
     record_button: Button,
     copy_button: Button,
     text_view: TextView,
-    window: gtk::Window,
+    window: ApplicationWindow,
     lang_combo_box: gtk::ComboBoxText,
     model_label: gtk::Label,
     model_choice_button: gtk::Button,
 }
 
-impl Default for Ui {
-    fn default() -> Self {
+impl Update for App {
+    type Model = (); // FIXME
+
+    type ModelParam = (); // FIXME
+
+    type Msg = Msg; // FIXME
+
+    fn model(relm: &relm::Relm<Self>, param: Self::ModelParam) -> Self::Model {
+        () // FIXME
+    }
+
+    fn update(&mut self, event: Self::Msg) {
+        match event {
+            Msg::ToggleRecord => {
+            let recorder = self.recorder.clone();
+            let recognition = self.recognition.clone();
+            move |_| {
+                let mut recorder = recorder.lock().unwrap();
+                if recorder.is_stopped() {
+                    recorder.start().expect("FIXME");
+                    ui.record_button.set_label("Recording...");
+                } else {
+                    ui.record_button.set_sensitive(false);
+                    let audio = recorder.stop();
+                    //thread::spawn({
+                        //let recognition = recognition.clone();
+                        //let tx = data_tx.clone();
+                        //move || {
+                            let text = recognition
+                                .lock()
+                                .unwrap()
+                                .as_ref()
+                                .expect("record button should be insensitive")
+                                .recognize(&audio)
+                                .expect("TODO: show a dialog for whisper error");
+                            //tx.send(text).expect("channel error");
+                        // }
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Widget for App {
+    type Root = ApplicationWindow;
+
+    fn root(&self) -> Self::Root {
+        self.window.clone()
+    }
+
+    fn view(relm: &relm::Relm<Self>, model: Self::Model) -> Self {
         let glade_src = include_str!("gwhisper.glade");
         let builder = gtk::Builder::from_string(glade_src);
 
-        let record_button: Button = builder.object("recognition_button").unwrap();
-        let copy_button: Button = builder.object("copy_button").unwrap();
-        let text_view: TextView = builder.object("text_view").unwrap();
-        let window: gtk::Window = builder.object("window").unwrap();
+        let record_button = builder.object("recognition_button").unwrap();
+        let copy_button = builder.object("copy_button").unwrap();
+        let text_view = builder.object("text_view").unwrap();
+        let window = builder.object("window").unwrap();
         let lang_combo_box = builder.object("lang_combo_box").unwrap();
         let model_label = builder.object("model_label").unwrap();
         let model_choice_button = builder.object("model_choice_button").unwrap();
 
-        Self {
+        let ui = Self {
             record_button,
             text_view,
             window,
@@ -76,11 +142,21 @@ impl Default for Ui {
             copy_button,
             model_label,
             model_choice_button,
-        }
+        };
+
+        ui.window.show_all();
+        connect!(
+            relm,
+            ui.record_button,
+            connect_clicked(_),
+            Msg::ToggleRecord
+        );
+
+        ui
     }
 }
 
-impl Application {
+impl Resources {
     fn set_model(recognition: &mut Option<Recognition>, ui: &Ui, model: &Path) {
         let path = model.to_str().expect("invalid utf8");
 
@@ -94,7 +170,7 @@ impl Application {
                 let dialog = gtk::MessageDialog::builder()
                     .parent(&ui.window)
                     .message_type(gtk::MessageType::Error)
-                    .text(e.to_string())
+                    .text(&e.to_string())
                     .buttons(gtk::ButtonsType::Ok)
                     .build();
                 dialog.run();
@@ -103,7 +179,7 @@ impl Application {
         }
     }
 
-    fn setup(&self) {
+    /*fn setup(&self) {
         let ui = Rc::new(Ui::default());
         let (data_tx, data_rx) = glib::MainContext::channel(glib::Priority::DEFAULT);
 
@@ -206,11 +282,13 @@ impl Application {
         // Present window
         ui.window.show_all();
         // TODO the executable should terminate when the window is closed
-    }
+    }*/
 }
 
 #[cfg(test)]
 mod test {
+    use relm::EventStream;
+
     use super::*;
 
     #[test]
@@ -218,6 +296,8 @@ mod test {
         if gtk::init().is_err() {
             panic!("Failed to initialize GTK.");
         }
-        let _ = Ui::default();
+        let stream = EventStream::new();
+        let relm = relm::Relm::new(&stream);
+        let _ = Ui::view(&relm, ());
     }
 }
