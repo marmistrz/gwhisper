@@ -9,9 +9,11 @@ edition = "2021"
 anyhow = "1.0.69"
 clap = { version = "4.1.8", features = ["derive"] }
 cpal = "0.15.0"
+derivative = "2.2.0"
 derive-new = "0.5.9"
 # gdk = "0.17.1"
 # glib = "0.18.1"
 # gtk = "0.17.0"
 gwhisper = { path = "../lib" }
 relm4 = "0.6.2"
+relm4-components = "0.6.2"
