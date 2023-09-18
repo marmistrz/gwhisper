@@ -89,8 +89,9 @@ pub struct AppState {
     buffer: gtk::TextBuffer,
     working: bool,
     recording: bool,
+    #[derivative(Default(value = r#""not loaded".into()"#))]
     model_path: String,
-    #[derivative(Default(value = "\"auto\".into()"))]
+    #[derivative(Default(value = r#""auto".into()"#))]
     lang: String,
 }
 
@@ -137,7 +138,7 @@ impl SimpleComponent for App {
                     },
                     gtk::Label {
                         #[watch]
-                        set_label: &model.app_state.model_path
+                        set_label: &format!("Model path: {}", model.app_state.model_path)
                     }
                 },
                 gtk::Box {
@@ -249,7 +250,7 @@ impl App {
         match Recognition::new(path) {
             Ok(rec) => {
                 *self.resources.recognition.lock().unwrap() = Some(rec);
-                self.app_state.model_path = format!("Model: {}", path);
+                self.app_state.model_path = path.to_owned();
             }
             Err(e) => {
                 // let dialog = gtk::MessageDialog::builder()
