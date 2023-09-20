@@ -6,8 +6,8 @@ use clap::Parser;
 use derivative::Derivative;
 use gtk::prelude::*;
 use gtk::traits::ButtonExt;
-use gwhisper::recogntion::{all_langs, Recognition};
-use gwhisper::recording::{self, Recorder};
+use gwhisper::recogntion::all_langs;
+use gwhisper::recording::Recorder;
 use relm4::gtk::gdk;
 use relm4::{component, prelude::*};
 use relm4_components::open_dialog::{
@@ -15,8 +15,10 @@ use relm4_components::open_dialog::{
 };
 use relm4_components::simple_combo_box::SimpleComboBox;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+
+mod worker;
+
+use worker::{RecognitionMsg, RecognitionWorker};
 
 const APP_NAME: &str = "gwhisper";
 
@@ -31,20 +33,6 @@ struct Opt {
 fn main() {
     let app = RelmApp::new("relm4.test.simple_manual");
     app.run::<App>(());
-    // Set up the input device and stream with the default input config.
-    // let (device, config) = recording::whisper_config("default").expect("FIXME");
-
-    // let recorder = Recorder::new(device, config.into());
-    // let app = Application {
-    //     recorder: Rc::new(Mutex::new(recorder)),
-    //     recognition: Arc::new(Mutex::new(None)),
-    // };
-
-    // if gtk::init().is_err() {
-    //     panic!("Failed to initialize GTK.");
-    // }
-    // app.setup();
-    // gtk::main() FIXME
 }
 
 #[derive(Debug)]
@@ -52,35 +40,11 @@ enum Msg {
     ToggleRecord,
     ChooseModel,
     LoadModel(PathBuf),
+    WriteText(String),
     CopyText,
     SetLang(usize),
-    RecvText(String),
     Ignore,
     // Quit,
-}
-
-struct Resources {
-    recorder: Rc<Mutex<Recorder>>,
-    recognition: Arc<Mutex<Option<Recognition>>>,
-}
-
-impl Default for Resources {
-    fn default() -> Self {
-        // Set up the input device and stream with the default input config.
-        let (device, config) = recording::whisper_config("default").expect("FIXME");
-
-        let recorder = Recorder::new(device, config.into());
-        Self {
-            recorder: Rc::new(Mutex::new(recorder)),
-            recognition: Arc::new(Mutex::new(None)),
-        }
-    }
-}
-
-impl Resources {
-    fn whisper_ready(&self) -> bool {
-        self.recognition.lock().unwrap().is_some()
-    }
 }
 
 #[derive(Derivative)]
@@ -91,13 +55,14 @@ pub struct AppState {
     recording: bool,
     #[derivative(Default(value = r#""not loaded".into()"#))]
     model_path: String,
-    #[derivative(Default(value = r#""auto".into()"#))]
-    lang: String,
 }
 
 struct App {
-    resources: Resources,
+    recorder: Recorder,
+    recognition_worker: Controller<RecognitionWorker>,
+
     app_state: AppState,
+
     open_dialog: Controller<OpenDialog>,
     lang_combo: Controller<SimpleComboBox<&'static str>>,
 }
@@ -131,7 +96,7 @@ impl SimpleComponent for App {
                         #[watch]
                         set_label: model.recording_label(), // FIXME threads
                         #[watch]
-                        set_sensitive: !model.app_state.working && model.resources.whisper_ready(),
+                        set_sensitive: !model.app_state.working, // FIXME && model.resources.whisper_ready(),
                         connect_clicked[sender] => move |_| {
                             sender.input(Msg::ToggleRecord);
                         }
@@ -169,7 +134,7 @@ impl SimpleComponent for App {
         root: &Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let resources = Resources::default();
+        let recorder = Recorder::default();
         let app_state = AppState::default();
 
         let open_dialog = OpenDialog::builder()
@@ -184,13 +149,24 @@ impl SimpleComponent for App {
             variants: all_langs().collect(),
             active_index: Some(0),
         };
-        let lang_combo = SimpleComboBox::builder().launch(lang_combo).forward(
+        let lang_combo = SimpleComboBox::builder()
+            .launch(lang_combo)
+            .forward(sender.input_sender(), Msg::SetLang);
+
+        let recognition_worker = RecognitionWorker::builder().launch(None).forward(
             sender.input_sender(),
-            |id| Msg::SetLang(id), // FIXME
+            |msg| match msg {
+                Ok(text) => Msg::WriteText(text),
+                Err(e) => {
+                    println!("TODO: show an error dialog: {}", e);
+                    Msg::Ignore
+                }
+            },
         );
 
         let model = Self {
-            resources,
+            recorder,
+            recognition_worker,
             app_state,
             open_dialog,
             lang_combo,
@@ -207,8 +183,8 @@ impl SimpleComponent for App {
             Msg::ToggleRecord => self.toggle_record(),
             Msg::ChooseModel => self.open_dialog.emit(OpenDialogMsg::Open),
             Msg::CopyText => self.copy_text(),
+            Msg::WriteText(text) => self.write_text(&text),
             Msg::SetLang(lang_id) => self.set_lang(lang_id),
-            Msg::RecvText(_) => todo!(),
             Msg::LoadModel(path) => self.load_model(&path),
             Msg::Ignore => {}
         }
@@ -217,66 +193,44 @@ impl SimpleComponent for App {
 
 impl App {
     fn toggle_record(&mut self) {
-        let recorder = self.resources.recorder.clone();
-        let recognition = self.resources.recognition.clone();
-        let mut recorder = recorder.lock().unwrap();
-        if recorder.is_stopped() {
-            recorder.start().expect("FIXME");
+        if self.recorder.is_stopped() {
+            self.recorder
+                .start()
+                .expect("TODO: show a dialog why recording failed to start");
         } else {
             self.app_state.working = true;
-            let audio = recorder.stop();
-
-            // FIXME use a worker/thread
-            //thread::spawn({
-            //let recognition = recognition.clone();
-            //let tx = data_tx.clone();
-            //move || {
-            let text = recognition
-                .lock()
-                .unwrap()
-                .as_ref()
-                .expect("record button should be insensitive")
-                .recognize(&audio)
-                .expect("TODO: show a dialog for whisper error");
-            self.app_state.buffer.set_text(&text);
-            //tx.send(text).expect("channel error");
-            // }
+            let audio = self.recorder.stop();
+            self.recognition_worker
+                .emit(RecognitionMsg::Transcribe(audio));
         }
     }
 
     fn load_model(&mut self, path: &Path) {
-        let path = path.to_str().expect("invalid utf8");
-
-        match Recognition::new(path) {
-            Ok(rec) => {
-                *self.resources.recognition.lock().unwrap() = Some(rec);
-                self.app_state.model_path = path.to_owned();
-            }
-            Err(e) => {
-                // let dialog = gtk::MessageDialog::builder()
-                //     .parent(&ui.window)
-                //     .message_type(gtk::MessageType::Error)
-                //     .text(e.to_string())
-                //     .buttons(gtk::ButtonsType::Ok)
-                //     .build();
-                // dialog.run();
-                // dialog.close();
-            }
-        }
+        let path = path.to_str().expect("invalid utf8").to_owned();
+        self.recognition_worker
+            .emit(RecognitionMsg::LoadModel(path.clone()));
+        // TODO: only do this if loading succeededs
+        self.app_state.model_path = path;
     }
 
     fn copy_text(&self) {
         let clipboard = gdk::Display::default().unwrap().clipboard();
-        let ref buffer = self.app_state.buffer;
+        let buffer = &self.app_state.buffer;
         let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), true);
         clipboard.set_text(text.as_str());
     }
 
     fn set_lang(&self, lang_id: usize) {
-        if let Some(ref mut rec) = *self.resources.recognition.lock().unwrap() {
-            let lang_id = lang_id.try_into().unwrap();
-            rec.set_lang_id(lang_id)
-        }
+        println!("Warning: this is temporarily unsupported, Recognition needs to be redesigned to be more flexible");
+        // if let Some(ref mut rec) = *self.resources.recognition.lock().unwrap() {
+        //     let lang_id = lang_id.try_into().unwrap();
+        //     rec.set_lang_id(lang_id)
+        // }
+    }
+
+    fn write_text(&mut self, text: &str) {
+        self.app_state.buffer.set_text(text);
+        self.app_state.working = false;
     }
 
     fn recording_label(&self) -> &str {
@@ -287,22 +241,3 @@ impl App {
         }
     }
 }
-
-// fn setup(&self) {
-//     let ui = Rc::new(Ui::default());
-//     let (data_tx, data_rx) = glib::MainContext::channel(glib::Priority::DEFAULT);
-
-//     data_rx.attach(None, {
-//         let ui = ui.clone();
-//         move |text: String| {
-//             ui.record_button.set_sensitive(true);
-//             let buffer = ui.text_view.buffer().expect("buffer");
-//             let mut end = buffer.end_iter();
-//             buffer.insert(&mut end, &text);
-//             ui.record_button.set_label("Record");
-
-//             glib::ControlFlow::Continue
-//         }
-//     });
-
-

@@ -1,5 +1,7 @@
-use whisper_rs::{get_lang_str, FullParams, WhisperContext, WhisperError};
+pub use whisper_rs::WhisperError;
+use whisper_rs::{get_lang_str, FullParams, WhisperContext};
 
+#[derive(Debug)]
 pub struct Recognition {
     ctx: WhisperContext,
     lang: String,
@@ -32,7 +34,7 @@ impl Recognition {
         params.set_no_context(true);
 
         let mut state = self.ctx.create_state()?;
-        state.full(params, &audio)?;
+        state.full(params, audio)?;
 
         let mut output = String::new();
         let num_segments = state.full_n_segments()?;
@@ -48,5 +50,6 @@ impl Recognition {
 
 pub fn all_langs() -> impl Iterator<Item = &'static str> {
     let num_langs = whisper_rs::get_lang_max_id();
-    (0..num_langs).map(|id| get_lang_str(id).expect(&format!("No lang name for id = {}", id)))
+    (0..num_langs)
+        .map(|id| get_lang_str(id).unwrap_or_else(|| panic!("No lang name for id = {}", id)))
 }
