@@ -42,7 +42,7 @@ enum Msg {
     LoadModel(PathBuf),
     WriteText(String),
     CopyText,
-    SetLang(usize),
+    SetLang(String),
     Ignore,
     // Quit,
 }
@@ -151,7 +151,7 @@ impl SimpleComponent for App {
         };
         let lang_combo = SimpleComboBox::builder()
             .launch(lang_combo)
-            .forward(sender.input_sender(), Msg::SetLang);
+            .forward(sender.input_sender(), |_| Msg::SetLang("auto".into())); // FIXME set the lang
 
         let recognition_worker = RecognitionWorker::builder().launch(None).forward(
             sender.input_sender(),
@@ -184,7 +184,7 @@ impl SimpleComponent for App {
             Msg::ChooseModel => self.open_dialog.emit(OpenDialogMsg::Open),
             Msg::CopyText => self.copy_text(),
             Msg::WriteText(text) => self.write_text(&text),
-            Msg::SetLang(lang_id) => self.set_lang(lang_id),
+            Msg::SetLang(lang) => self.set_lang(lang),
             Msg::LoadModel(path) => self.load_model(&path),
             Msg::Ignore => {}
         }
@@ -220,12 +220,8 @@ impl App {
         clipboard.set_text(text.as_str());
     }
 
-    fn set_lang(&self, lang_id: usize) {
-        println!("Warning: this is temporarily unsupported, Recognition needs to be redesigned to be more flexible");
-        // if let Some(ref mut rec) = *self.resources.recognition.lock().unwrap() {
-        //     let lang_id = lang_id.try_into().unwrap();
-        //     rec.set_lang_id(lang_id)
-        // }
+    fn set_lang(&self, lang: String) {
+        self.recognition_worker.emit(RecognitionMsg::SetLang(lang))
     }
 
     fn write_text(&mut self, text: &str) {

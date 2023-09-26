@@ -4,34 +4,32 @@ use whisper_rs::{get_lang_str, FullParams, WhisperContext};
 #[derive(Debug)]
 pub struct Recognition {
     ctx: WhisperContext,
-    lang: String,
 }
 
-const DEFAULT_LANG: &str = "auto";
+#[derive(Default)]
+pub struct RecognitionOptions {
+    pub lang: String, // TODO: use a custom type with sane defaults
+    pub progress_closure: Option<Box<dyn FnMut(i32)>>,
+}
 
 impl Recognition {
     pub fn new(model: &str) -> Result<Self, WhisperError> {
         println!("whisper system info: {}", whisper_rs::print_system_info());
         let ctx = WhisperContext::new(model)?;
-        Ok(Self {
-            ctx,
-            lang: DEFAULT_LANG.to_owned(),
-        })
+        Ok(Self { ctx })
     }
 
-    pub fn set_lang(&mut self, lang: &str) {
-        self.lang = lang.to_owned();
-    }
-
-    pub fn set_lang_id(&mut self, lang_id: i32) {
-        let lang = get_lang_str(lang_id).expect("unknown lang id");
-        self.set_lang(lang);
-    }
-
-    pub fn recognize(&self, audio: &[f32]) -> Result<String, WhisperError> {
+    pub fn recognize(
+        &self,
+        audio: &[f32],
+        options: RecognitionOptions,
+    ) -> Result<String, WhisperError> {
         let mut params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
-        params.set_language(Some(&self.lang));
+        params.set_language(Some(options.lang.as_ref()));
         params.set_no_context(true);
+        if let Some(closure) = options.progress_closure {
+            params.set_progress_callback_safe(closure);
+        }
 
         let mut state = self.ctx.create_state()?;
         state.full(params, audio)?;

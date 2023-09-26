@@ -8,9 +8,10 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.69"
 cpal = "0.15.0"
+derivative = "2.2.0"
 derive-error = "0.0.5"
 derive-new = "0.5.9"
-whisper-rs = "0.8.0"
+whisper-rs = { git = "https://github.com/tazz4843/whisper-rs", branch = "master" }
 
 [features]
 cuda = ["whisper-rs/cuda"]
