@@ -46,7 +46,6 @@ enum Msg {
     CopyText,
     SetLang(String),
     Ignore,
-    // Quit,
 }
 
 #[derive(Derivative)]
@@ -147,6 +146,7 @@ impl SimpleComponent for App {
                 OpenDialogResponse::Cancel => Msg::Ignore,
             });
 
+        // TODO: add support for lang = "auto"
         let lang_combo = SimpleComboBox {
             variants: all_langs().collect(),
             active_index: Some(0),
