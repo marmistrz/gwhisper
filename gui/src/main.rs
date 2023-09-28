@@ -31,6 +31,8 @@ struct Opt {
 }
 
 fn main() {
+    // TODO default to log level info
+    env_logger::init();
     let app = RelmApp::new("relm4.test.simple_manual");
     app.run::<App>(());
 }
@@ -184,7 +186,7 @@ impl SimpleComponent for App {
             Msg::ChooseModel => self.open_dialog.emit(OpenDialogMsg::Open),
             Msg::CopyText => self.copy_text(),
             Msg::WriteText(text) => self.write_text(&text),
-            Msg::SetLang(lang) => self.set_lang(lang),
+            Msg::SetLang(_) => self.set_lang(),
             Msg::LoadModel(path) => self.load_model(&path),
             Msg::Ignore => {}
         }
@@ -194,10 +196,12 @@ impl SimpleComponent for App {
 impl App {
     fn toggle_record(&mut self) {
         if self.recorder.is_stopped() {
+            self.app_state.recording = true;
             self.recorder
                 .start()
                 .expect("TODO: show a dialog why recording failed to start");
         } else {
+            self.app_state.recording = false;
             self.app_state.working = true;
             let audio = self.recorder.stop();
             self.recognition_worker
@@ -220,7 +224,13 @@ impl App {
         clipboard.set_text(text.as_str());
     }
 
-    fn set_lang(&self, lang: String) {
+    fn set_lang(&self) {
+        let lang = self
+            .lang_combo
+            .model()
+            .get_active_elem()
+            .expect("no active element")
+            .to_string();
         self.recognition_worker.emit(RecognitionMsg::SetLang(lang))
     }
 

@@ -11,6 +11,7 @@ cpal = "0.15.0"
 derivative = "2.2.0"
 derive-error = "0.0.5"
 derive-new = "0.5.9"
+log = "0.4.20"
 whisper-rs = { git = "https://github.com/tazz4843/whisper-rs", branch = "master" }
 
 [features]

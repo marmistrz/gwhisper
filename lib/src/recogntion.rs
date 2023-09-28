@@ -1,3 +1,4 @@
+use log::info;
 pub use whisper_rs::WhisperError;
 use whisper_rs::{get_lang_str, FullParams, WhisperContext};
 
@@ -25,8 +26,10 @@ impl Recognition {
         options: RecognitionOptions,
     ) -> Result<String, WhisperError> {
         let mut params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
+        info!("Setting language to {}", options.lang);
         params.set_language(Some(options.lang.as_ref()));
         params.set_no_context(true);
+        params.set_translate(false);
         if let Some(closure) = options.progress_closure {
             params.set_progress_callback_safe(closure);
         }

@@ -11,6 +11,7 @@ clap = { version = "4.1.8", features = ["derive"] }
 cpal = "0.15.0"
 derivative = "2.2.0"
 derive-new = "0.5.9"
+env_logger = "0.10.0"
 # gdk = "0.17.1"
 # glib = "0.18.1"
 # gtk = "0.17.0"

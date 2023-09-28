@@ -29,6 +29,8 @@ struct Opt {
 }
 
 fn main() -> Result<(), anyhow::Error> {
+    env_logger::init();
+
     let opt = Opt::parse();
     let recognition = Recognition::new(&opt.model)?;
 
