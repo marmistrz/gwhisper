@@ -10,3 +10,4 @@ gwhisper = { path = "../lib" }
 anyhow = "1.0.69"
 clap = { version = "4.1.8", features = ["derive"] }
 ctrlc = "3.4.0"
+env_logger = "0.10.0"

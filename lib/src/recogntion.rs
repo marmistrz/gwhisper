@@ -1,33 +1,41 @@
-use whisper_rs::{get_lang_str, FullParams, WhisperContext, WhisperError};
+use log::info;
+pub use whisper_rs::WhisperError;
+use whisper_rs::{get_lang_str, FullParams, WhisperContext};
 
+#[derive(Debug)]
 pub struct Recognition {
     ctx: WhisperContext,
-    lang: String,
 }
 
-const DEFAULT_LANG: &str = "auto";
+#[derive(Default)]
+pub struct RecognitionOptions {
+    pub lang: String, // TODO: use a custom type with sane defaults
+    pub progress_closure: Option<Box<dyn FnMut(i32)>>,
+}
 
 impl Recognition {
     pub fn new(model: &str) -> Result<Self, WhisperError> {
         println!("whisper system info: {}", whisper_rs::print_system_info());
         let ctx = WhisperContext::new(model)?;
-        Ok(Self {
-            ctx,
-            lang: DEFAULT_LANG.to_owned(),
-        })
+        Ok(Self { ctx })
     }
 
-    pub fn set_lang(&mut self, lang: &str) {
-        self.lang = lang.to_owned();
-    }
-
-    pub fn recognize(&self, audio: &[f32]) -> Result<String, WhisperError> {
+    pub fn recognize(
+        &self,
+        audio: &[f32],
+        options: RecognitionOptions,
+    ) -> Result<String, WhisperError> {
         let mut params = FullParams::new(whisper_rs::SamplingStrategy::Greedy { best_of: 1 });
-        params.set_language(Some(&self.lang));
+        info!("Setting language to {}", options.lang);
+        params.set_language(Some(options.lang.as_ref()));
         params.set_no_context(true);
+        params.set_translate(false);
+        if let Some(closure) = options.progress_closure {
+            params.set_progress_callback_safe(closure);
+        }
 
         let mut state = self.ctx.create_state()?;
-        state.full(params, &audio)?;
+        state.full(params, audio)?;
 
         let mut output = String::new();
         let num_segments = state.full_n_segments()?;
@@ -43,5 +51,6 @@ impl Recognition {
 
 pub fn all_langs() -> impl Iterator<Item = &'static str> {
     let num_langs = whisper_rs::get_lang_max_id();
-    (0..num_langs).map(|id| get_lang_str(id).expect(&format!("No lang name for id = {}", id)))
+    (0..num_langs)
+        .map(|id| get_lang_str(id).unwrap_or_else(|| panic!("No lang name for id = {}", id)))
 }

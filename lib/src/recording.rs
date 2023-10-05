@@ -1,7 +1,7 @@
 pub use cpal;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    Device, SampleFormat, SampleRate, Stream, SupportedStreamConfig, StreamConfig,
+    Device, SampleFormat, SampleRate, Stream, StreamConfig, SupportedStreamConfig,
 };
 use std::sync::{Arc, Mutex};
 
@@ -56,6 +56,13 @@ impl Recorder {
         drop(stream);
         let audio = self.audio.lock().unwrap().clone(); // FIXME move
         audio
+    }
+}
+
+impl Default for Recorder {
+    fn default() -> Self {
+        let (device, config) = whisper_config("default").expect("FIXME");
+        Self::new(device, config.into())
     }
 }
 

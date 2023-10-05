@@ -4,6 +4,7 @@
 
 use anyhow::Context;
 use clap::Parser;
+use gwhisper::recogntion::RecognitionOptions;
 use gwhisper::recording::Recorder;
 use gwhisper::{recogntion::Recognition, recording};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,8 +29,10 @@ struct Opt {
 }
 
 fn main() -> Result<(), anyhow::Error> {
+    env_logger::init();
+
     let opt = Opt::parse();
-    let mut recognition = Recognition::new(&opt.model)?;
+    let recognition = Recognition::new(&opt.model)?;
 
     let (device, config) = recording::whisper_config(&opt.device)?;
 
@@ -57,9 +60,13 @@ fn main() -> Result<(), anyhow::Error> {
 
     println!("Recording complete, len = {}!", audio.len());
 
-    // TODO check if the model exists earlier on. Perhaps create the context earlier?
-    recognition.set_lang(&opt.lang);
-    let output = recognition.recognize(&audio).expect("whisper error");
+    let options = RecognitionOptions {
+        lang: opt.lang,
+        ..Default::default()
+    };
+    let output = recognition
+        .recognize(&audio, options)
+        .expect("whisper error");
 
     println!("{}", output.trim());
 
