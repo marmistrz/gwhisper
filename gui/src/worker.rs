@@ -28,8 +28,10 @@ impl Worker for RecognitionWorker {
     fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>) {
         match msg {
             RecognitionMsg::Transcribe(audio) => {
-                let mut options = RecognitionOptions::default();
-                options.lang = self.lang.clone();
+                let options = RecognitionOptions {
+                    lang: self.lang.clone(),
+                    ..Default::default()
+                };
                 let rec_result = self
                     .recognition
                     .as_ref()
