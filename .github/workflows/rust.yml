@@ -20,8 +20,8 @@ jobs:
         packages: libasound2-dev libgtk-4-dev
         version: 1.0
     - name: Build
-      run: cargo build
+      run: cargo build -- -D warnings
     - name: Clippy
-      run: cargo clippy
+      run: cargo clippy -- -D warnings
     - name: Test
       run: cargo test
