@@ -21,5 +21,7 @@ jobs:
         version: 1.0
     - name: Build
       run: cargo build
+    - name: Clippy
+      run: cargo clippy
     - name: Test
       run: cargo test
