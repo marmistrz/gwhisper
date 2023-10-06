@@ -16,5 +16,6 @@ env_logger = "0.10.0"
 # glib = "0.18.1"
 # gtk = "0.17.0"
 gwhisper = { path = "../lib" }
+log = "0.4.20"
 relm4 = "0.6.2"
 relm4-components = "0.6.2"
